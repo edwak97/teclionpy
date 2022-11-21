@@ -25,10 +25,8 @@ _td_send.argtypes = [c_int, c_char_p]
 
 client_id = _td_create_client_id()
 
-###		Main cycle
-
 line = ''
-updatesFilter = ''
+updatesFilter = 'updateChatFilters'#default value
 keepWork = True
 
 def listenToTDLibUpdates():
@@ -39,18 +37,17 @@ def listenToTDLibUpdates():
 		msg = _td_receive(math.inf).decode('utf-8')
 		data = json.loads(msg.encode('utf-8'))
 		
-		if  ("@extra" in data):
-
-			if data['@extra'] == 1:
+		if data.get('@extra') == 1 or data.get('@type') == updatesFilter:
 				
-				print(("{}:\n{}".format("Look up for @extra", msg)))
+			print(("{}:\n{}".format("Look up for @extra", msg)))
 
 tListener = Thread(target = listenToTDLibUpdates)
 
 while (True):
-	#updatesFilter = input('@type = ')
-	#if updatesFilter == "exit":
-		#quit()
+	updatesFilterLocal = input('@type = ')
+	if updatesFilterLocal == "exit":
+		keepWork = False
+		quit()
 	line = input('json> ')
 	if (line == 'exit'):
 		keepWork = False
