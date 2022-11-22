@@ -3,6 +3,7 @@ from ctypes import *
 import json
 import sys
 
+
 #tdjson_path = find_library('td/tdlib/lib/libtdjson.so') #or 'libtdjson.dll' #?? for Windows
 tdjson_path = 'td/tdlib/lib/libtdjson.so.1.8.4'
 if tdjson_path is None:
@@ -16,38 +17,15 @@ _td_create_client_id.argtypes = []
 
 _td_receive = tdjson.td_receive
 _td_receive.restype = c_char_p
-_td_receive.argtypes = [c_double]
+_td_receive.argtypes = [c_double] #timeout -- maximum number of seconds allowed to wait for new data
 
 _td_send = tdjson.td_send
 _td_send.restype = None
 _td_send.argtypes = [c_int, c_char_p]
 
-_td_execute = tdjson.td_execute
-_td_execute.restype = c_char_p
-_td_execute.argtypes = [c_char_p]
-
-log_message_callback_type = CFUNCTYPE(None, c_int, c_char_p)
-
-_td_set_log_message_callback = tdjson.td_set_log_message_callback
-_td_set_log_message_callback.restype = None
-_td_set_log_message_callback.argtypes = [c_int, log_message_callback_type]
-
-@log_message_callback_type
-def on_log_message_callback(verbosity_level, message):
-	if verbosity_level == 0:
-		sys.exit('TDLib fatal error: %r' % message)
-
-def td_execute(query):
-	query = json.dumps(query).encode('utf-8')
-	result=_td_execute(query)
-	if result:
-		result = json.loads(result.decode('utf-8'))
-	return result
-
-_td_set_log_message_callback(2, on_log_message_callback)
-
-# setting TDLib log verbosity level to 1 (errors)
-print(str(td_execute({'@type': 'setLogVerbosityLevel', 'new_verbosity_level': 1, '@extra': 1.01234})).encode('utf-8'))
+tdlib_timeout = 2.0
+api_id = 0
+api_hash = ''
 
 client_id = _td_create_client_id()
 
@@ -56,14 +34,37 @@ def td_send(query):
 	_td_send(client_id, query)
 	
 def td_receive():
-	result = _td_receive(1.0)
+	result = _td_receive(tdlib_timeout)
 	if result:
 		result = json.loads(result.decode('utf-8'))
-	return result 
+	return result
 
-td_send({'@type': 'getAuthorizationState', '@extra': 1.01234})
+try:
+	configFile = open('teclionpy.config', 'r')
+	configFileLines = configFile.readlines()
+	api_id_line = (configFileLines[0].strip()).split(' ')
+	api_hash_line = (configFileLines[1].strip()).split(' ')
+	if api_id_line[0] == 'api_id' and api_hash_line[0] == 'api_hash':
+		api_id = api_id_line[1]
+		api_hash = api_hash_line[1]
+	else:
+		print('Broken config file.')
+		sys.stdout.flush()
+		configFile.close()
+		quit()
+except:			
+	print('Broken config file.')
+	sys.stdout.flush()
+	quit()
 
-while True:
+td_send({'@type': 'setLogVerbosityLevel', 'new_verbosity_level': 1})
+td_send({'@type': 'setLogStream', 'log_stream': {
+				'@type': 'logStreamFile',
+				'path': 'teclionpy.log',
+				'max_file_size': 104857600,
+				'redirect_stderr': True}})
+needAuth = True
+while needAuth:
 	event = td_receive()
 	if event:
 		if event['@type'] == 'updateAuthorizationState':
@@ -77,8 +78,8 @@ while True:
 								'database_directory': 'tdlib',
 								'use_message_database': True,
 								'use_secret_chats': False,
-								'api_id': 5324500,
-								'api_hash': '715c175c34436ba2cf204355ccaa4a48',
+								'api_id': api_id,
+								'api_hash': api_hash,
 								'system_language_code': 'en',
 								'device_model': 'Desktop',
 								'application_version': '0.1',
@@ -89,7 +90,7 @@ while True:
 
 			if auth_state['@type'] == 'authorizationStateWaitPhoneNumber':
 				phone_number = input('Kindly let the app know your phone number:\n')
-				td_send({'type': 'setAuthenticationPhoneNumber', 'phone_number': phone_number})
+				td_send({'@type': 'setAuthenticationPhoneNumber', 'phone_number': phone_number})
 
 			if auth_state['@type'] == 'authorizationStateWaitCode':
 				code = input('Kindly enter the code your received:\n')
@@ -104,5 +105,5 @@ while True:
 				password = input('Kindly enter your 2fa password:\n')
 				td_send({'@type': 'checkAuthenticationPassword', 'password': password})
 
-		print(str(event).encode('utf-8'))
+			print(str(event).encode('utf-8'))
 		sys.stdout.flush()	
