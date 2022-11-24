@@ -1,6 +1,8 @@
 from ctypes.util import find_library
 from ctypes import *
 from threading import Thread
+from os import system, name
+
 import json
 import sys
 import readline
@@ -30,6 +32,9 @@ api_hash = ''
 keepWorking = True
 
 client_id = _td_create_client_id()
+
+def fitScreen():
+	_ = system('cls') if name == 'nt' else system('clear')
 
 def td_send(query):
 	query = json.dumps(query).encode('utf-8')
@@ -69,13 +74,14 @@ td_send({'@type': 'setLogVerbosityLevel', 'new_verbosity_level': 1})
 
 chatFiltersState = []
 def changeChatFiltersState (newJsonState):
-	chatFiltersState = newJsonState["chat_filters"]#.sort(key = lambda item: item['id'])
-	print('\n Hey! \n')
-	print(str(chatFiltersState).encode('utf-8'))
-	print("\n")
+	global chatFiltersState
+	chatFiltersState = sorted(newJsonState["chat_filters"], key = lambda item: item['id'])
+
 def printState():
+	fitScreen()
 	for item in chatFiltersState:
-		print(str(item["title"]).encode('utf-8'))
+		print(item["title"],' |', end = ' ')
+	print('\nteclionpy> ')
 	sys.stdout.flush()
 
 def tUpdateListener():
@@ -120,11 +126,10 @@ def tUpdateListener():
 					password = input('Kindly enter your 2fa password:\n')
 					td_send({'@type': 'checkAuthenticationPassword', 'password': password})
 
-				print(str(event).encode('utf-8'))
+				#print(str(event).encode('utf-8'))
 			if event['@type'] == 'updateChatFilters':
 				changeChatFiltersState(event)
 				printState()
-				#print(str(event).encode('utf-8'))
 			sys.stdout.flush()
 
 tUpdateListenerThread = Thread(target = tUpdateListener)
@@ -134,17 +139,10 @@ while (True):
 	if updatesFilterLocal == "exit":
 		keepWork = False
 		quit() """
-	line = input('teclionpy> ')
+	line = input('')
 	if (line == 'exit'):
 		keepWorking = False
 		tUpdateListenerThread.join()
 		quit()
-	"""
-	try:
-		data = json.loads(line)
-	except:
-		print('Invalid json, try again.')
-		continue
-
-	data['@extra'] = 1
-	_td_send(client_id, json.dumps(data).encode('utf-8'))"""
+	if not tUpdteListenerThread.is_alive():
+		tUpdateListenerThread.start()
