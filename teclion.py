@@ -1,11 +1,21 @@
 from threading import Thread
 from os import system, name
 
+import time
 import json
 import sys
 import readline
 import teclionpyModules.initdata as initdata
 #import teclionpyModules.eventHandler as eventHandler
+
+keepWorking = True
+
+### Straightforward state from updates ###
+chatFiltersState = []
+chatPositionState = {}
+
+### UI State ###
+currentChatFilter = None #
 
 def fitScreen():
 	if name == 'nt':
@@ -13,29 +23,39 @@ def fitScreen():
 	else:
 		system('clear')
 
-chatFiltersState = []
-def changeChatFiltersState (newJsonState):
+def setCurrentChatFilter():
+	pass
+
+def changeChatFiltersState (newState):
 	global chatFiltersState
-	chatFiltersState = sorted(newJsonState["chat_filters"], key = lambda item: item['id'])
+	chatFiltersState = sorted(newState["chat_filters"], key = lambda item: item['id'])
+
+def changeChatPositionState(newState):
+	global chatPositionState
+
+	itemKey = newState['chat_id']
+	itemValue = (newState['position']['order'], newState['position']['is_pinned'])
+	chatPositionState[itemKey] = itemValue
 
 def printState():
 	fitScreen()
 	for item in chatFiltersState:
 		print(item["title"],' |', end = ' ')
-	print('\nteclionpy> ')
+	print('\n')
+	print('teclionpy> ')
 	sys.stdout.flush()
 
-keepWorking = True
 def tUpdateListener():
 	while keepWorking:
 		event = initdata.td_receive()
 		#eventHandler.Handle(event) 
 		if event:
+			letsPrint = False
 			if event['@type'] == 'updateAuthorizationState':
 				auth_state = event['authorization_state']
 
 				if auth_state['@type'] == 'authorizationStateClosed':#todo unclear when it happens. Need to investigate.
-					break
+					print ('it\'s broken!') 
 
 				if auth_state['@type'] == 'authorizationStateWaitEncryptionKey':
 					initdata.td_send({'@type': 'checkDatabaseEncryptionKey', 'encryption_key': ''})
@@ -59,13 +79,17 @@ def tUpdateListener():
 
 			if event['@type'] == 'updateChatFilters':
 				changeChatFiltersState(event)
+				letsPrint = True
+			if event['@type'] == 'updateChatPosition':# or event['@type'] == 'updateChatLastMessage' or event['@type'] == 'updateChatDraftMessage':
+				letsPrint = True
+				changeChatPositionState(event)
+			if letsPrint:
 				printState()
-			sys.stdout.flush()
 
 tUpdateListenerThread = Thread(target = tUpdateListener)
 tUpdateListenerThread.start()
+
 while (True):
-	fitScreen()
 	line = input('teclionpy> ')
 	#inputHandler(line)
 	if (line == 'exit'):
